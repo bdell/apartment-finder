@@ -23,7 +23,8 @@ RUN apt-get update && \
               zip \
               git-core \
               supervisor \
-              sqlite
+              sqlite \
+              requests
 
 RUN mkdir -p /tmp
 COPY requirements.txt /tmp/requirements.txt

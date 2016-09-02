@@ -1,5 +1,6 @@
 import settings
 import math
+import requests
 
 def coord_distance(lat1, lon1, lat2, lon2):
     """
@@ -18,6 +19,23 @@ def coord_distance(lat1, lon1, lat2, lon2):
     km = 6367 * c
     return km
 
+
+def get_crime_results(lat, lon):
+    """
+    Looks up crimes in radius of latitude and longitude using spotcrime api.
+    """
+    crime_url = "http://api.spotcrime.com/crimes.json"
+    search_params = {"lat": lat,
+                     "lon": lon,
+                     "radius": settings.CRIME_RADIUS,
+                     "key": settings.SPOTCRIME_API_KEY}
+    try:
+        crime_count = len(requests.get(crime_url, params=search_params).json()['crimes'])
+    except ValueError:
+        crime_count = 999
+    return crime_count
+
+
 def in_box(coords, box):
     """
     Find if a coordinate tuple is inside a bounding box.
@@ -35,7 +53,12 @@ def post_listing_to_slack(sc, listing):
     :param sc: A slack client.
     :param listing: A record of the listing.
     """
-    desc = "{0} | {1} | {2} | {3} | <{4}>".format(listing["area"], listing["price"], listing["bart_dist"], listing["name"], listing["url"])
+    desc = "{0} | {1} | {2: .3f} | {3} | {4} | <{5}>".format(listing["area"],
+                                                             listing["price"],
+                                                             listing["bart_dist"],
+                                                             listing["crime_count"],
+                                                             listing["name"],
+                                                             listing["url"])
     sc.api_call(
         "chat.postMessage", channel=settings.SLACK_CHANNEL, text=desc,
         username='pybot', icon_emoji=':robot_face:'
@@ -55,6 +78,8 @@ def find_points_of_interest(geotag, location):
     near_bart = False
     bart_dist = "N/A"
     bart = ""
+    local_crime_count = 0
+
     # Look to see if the listing is in any of the neighborhood boxes we defined.
     for a, coords in settings.BOXES.items():
         if in_box(geotag, coords):
@@ -78,10 +103,14 @@ def find_points_of_interest(geotag, location):
             if hood in location.lower():
                 area = hood
 
+    if area is not False:
+        crime_count = get_crime_results(geotag[0], geotag[1])
+
     return {
         "area_found": area_found,
         "area": area,
         "near_bart": near_bart,
         "bart_dist": bart_dist,
-        "bart": bart
+        "bart": bart,
+        "crime_count": crime_count
     }
